@@ -1,0 +1,36 @@
+<!doctype html>
+{% load static %}
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Compression Result</title>
+  <link rel="stylesheet" href="{% static 'compressor/css/styles.css' %}">
+</head>
+<body>
+  <main class="container">
+    <h1>Compression Result</h1>
+
+    <div class="row">
+      <div class="col">
+        <h3>Original</h3>
+        <img src="{{ orig_url }}" alt="original" class="preview">
+        <p>Size: {{ orig_size }} bytes</p>
+      </div>
+
+      <div class="col">
+        <h3>Compressed (k={{ k }})</h3>
+        <img src="{{ comp_url }}" alt="compressed" class="preview">
+        <p>Size: {{ comp_size }} bytes</p>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <p><strong>Compression ratio:</strong> {{ ratio|floatformat:2 }}x</p>
+      <p><strong>PSNR:</strong> {{ psnr|floatformat:2 }} dB</p>
+      <p class="hint">Higher PSNR means closer to original. Aim for ≥ 30 dB for decent quality (depends on image).</p>
+    </div>
+
+    <a href="{% url 'compressor:index' %}" class="btn">Compress another</a>
+  </main>
+</body>
+</html>

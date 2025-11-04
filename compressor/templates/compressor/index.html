@@ -1,0 +1,139 @@
+<!doctype html>
+{% load static %}
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SVD Compressor — Live Preview</title>
+  <link rel="stylesheet" href="{% static 'compressor/css/styles.css' %}">
+  <style>
+    /* tiny spinner + layout tweak */
+    .spinner{display:none;width:28px;height:28px;border-radius:50%;border:4px solid rgba(0,0,0,.08);border-top-color:#111;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .preview-row{display:flex;gap:18px;align-items:flex-start}
+    .preview-card{flex:1}
+    .muted{color:#6b7280;font-size:13px}
+    .slider-row{display:flex;gap:12px;align-items:center;margin-top:8px}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>SVD Image Compressor — Live Preview</h1>
+
+    <form id="uploadForm" method="post" enctype="multipart/form-data" action="{% url 'compressor:compress' %}">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="slider-row">
+        <label for="kRange">k</label>
+        <input id="kRange" name="kRange" type="range" min="1" max="200" value="{{ form.initial.k|default:50 }}">
+        <output id="kValue">50</output>
+        <div class="spinner" id="liveSpinner"></div>
+      </div>
+
+      <button type="submit" class="btn">Compress (save)</button>
+    </form>
+
+    <p class="muted">Drag the slider to preview compression. Slider sends the file + k to the server via AJAX (won't save until you press Compress).</p>
+
+    <section class="preview-row" style="margin-top:18px">
+      <div class="preview-card">
+        <h4>Original</h4>
+        <img id="origPreview" src="" alt="original preview" class="preview" style="display:none">
+        <p id="origMsg" class="muted">No file chosen</p>
+      </div>
+
+      <div class="preview-card">
+        <h4>Live compressed preview</h4>
+        <img id="compPreview" src="" alt="compressed preview" class="preview" style="display:none">
+        <p id="compMsg" class="muted">No preview</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Helpers: CSRF
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    const fileInput = document.querySelector('input[type=file]');
+    const kRange = document.getElementById('kRange');
+    const kValue = document.getElementById('kValue');
+    const origPreview = document.getElementById('origPreview');
+    const compPreview = document.getElementById('compPreview');
+    const origMsg = document.getElementById('origMsg');
+    const compMsg = document.getElementById('compMsg');
+    const spinner = document.getElementById('liveSpinner');
+
+    let debounceTimer = null;
+
+    // show chosen original locally (file -> objectURL)
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        origPreview.style.display = 'none';
+        origMsg.textContent = 'No file chosen';
+        return;
+      }
+      origPreview.src = URL.createObjectURL(file);
+      origPreview.style.display = '';
+      origMsg.textContent = `${file.name} — ${file.size} bytes`;
+      triggerPreview(); // auto preview when user picks file
+    });
+
+    kRange.addEventListener('input', () => {
+      kValue.value = kRange.value;
+      // live preview but debounce to avoid too many uploads
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(triggerPreview, 400);
+    });
+
+    function triggerPreview() {
+      const file = fileInput.files[0];
+      if (!file) {
+        compMsg.textContent = 'Choose an image file first';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('k', kRange.value);
+
+      spinner.style.display = 'inline-block';
+      compMsg.textContent = 'Processing...';
+
+      fetch("{% url 'compressor:preview' %}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrftoken},
+        body: formData
+      }).then(r => r.json())
+        .then(data => {
+          spinner.style.display = 'none';
+          if (data.error) {
+            compMsg.textContent = 'Error: ' + (data.error || 'unknown');
+            return;
+          }
+          compPreview.src = data.comp_url;
+          compPreview.style.display = '';
+          compMsg.innerHTML = `PSNR: ${data.psnr} dB — size ${data.comp_size} bytes (orig ${data.orig_size} bytes)`;
+        })
+        .catch(err => {
+          spinner.style.display = 'none';
+          compMsg.textContent = 'Network error';
+          console.error(err);
+        });
+    }
+  </script>
+</body>
+</html>
