@@ -20,8 +20,12 @@
       <div class="col">
         <h3>Compressed (k={{ k }})</h3>
         <img src="{{ comp_url }}" alt="compressed" class="preview">
-        <p>Size: {{ comp_size }} bytes</p>
-      </div>
+          <p>Size: {{ comp_size }} bytes</p>
+          <p style="margin-top:8px">
+            <a href="{{ comp_url }}" download class="btn">Download compressed</a>
+            <a href="{{ orig_url }}" download class="btn secondary" style="margin-left:8px">Download original</a>
+          </p>
+        </div>
     </div>
 
     <div class="metrics">
@@ -30,7 +34,12 @@
       <p class="hint">Higher PSNR means closer to original. Aim for ≥ 30 dB for decent quality (depends on image).</p>
     </div>
 
-    <a href="{% url 'compressor:index' %}" class="btn">Compress another</a>
+    <a href="{% url 'compressor:index' %}" class="btn secondary back-btn" aria-label="Back to compressor">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin-right:8px">
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Back
+    </a>
   </main>
 </body>
 </html>

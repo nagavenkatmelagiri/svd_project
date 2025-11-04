@@ -39,12 +39,18 @@
         <h4>Original</h4>
         <img id="origPreview" src="" alt="original preview" class="preview" style="display:none">
         <p id="origMsg" class="muted">No file chosen</p>
+        <p style="margin-top:8px">
+          <a id="downloadOrig" class="btn secondary" style="display:none" download>Download original</a>
+        </p>
       </div>
 
       <div class="preview-card">
         <h4>Live compressed preview</h4>
         <img id="compPreview" src="" alt="compressed preview" class="preview" style="display:none">
         <p id="compMsg" class="muted">No preview</p>
+        <p style="margin-top:8px">
+          <a id="downloadComp" class="btn" style="display:none;margin-right:8px" download>Download preview</a>
+        </p>
       </div>
     </section>
   </main>
@@ -67,7 +73,7 @@
     }
     const csrftoken = getCookie('csrftoken');
 
-    const fileInput = document.querySelector('input[type=file]');
+  const fileInput = document.querySelector('input[type=file]');
     const kRange = document.getElementById('kRange');
     const kValue = document.getElementById('kValue');
     const origPreview = document.getElementById('origPreview');
@@ -75,20 +81,32 @@
     const origMsg = document.getElementById('origMsg');
     const compMsg = document.getElementById('compMsg');
     const spinner = document.getElementById('liveSpinner');
+  const downloadOrig = document.getElementById('downloadOrig');
+  const downloadComp = document.getElementById('downloadComp');
 
     let debounceTimer = null;
 
-    // show chosen original locally (file -> objectURL)
+    // show chosen original locally (file -> objectURL) and enable download
+    let origObjectUrl = null;
     fileInput.addEventListener('change', () => {
       const file = fileInput.files[0];
       if (!file) {
+        if (origObjectUrl) URL.revokeObjectURL(origObjectUrl);
+        origObjectUrl = null;
         origPreview.style.display = 'none';
         origMsg.textContent = 'No file chosen';
+        downloadOrig.style.display = 'none';
         return;
       }
-      origPreview.src = URL.createObjectURL(file);
+      if (origObjectUrl) URL.revokeObjectURL(origObjectUrl);
+      origObjectUrl = URL.createObjectURL(file);
+      origPreview.src = origObjectUrl;
       origPreview.style.display = '';
       origMsg.textContent = `${file.name} — ${file.size} bytes`;
+      // enable original download using objectURL (set filename)
+      downloadOrig.href = origObjectUrl;
+      downloadOrig.download = file.name;
+      downloadOrig.style.display = '';
       triggerPreview(); // auto preview when user picks file
     });
 
@@ -126,6 +144,16 @@
           }
           compPreview.src = data.comp_url;
           compPreview.style.display = '';
+          // show download link for compressed preview
+          downloadComp.href = data.comp_url;
+          // try to infer filename from URL
+          try {
+            const parts = data.comp_url.split('/');
+            downloadComp.download = parts[parts.length - 1] || `compressed_k${kRange.value}.png`;
+          } catch (e) {
+            downloadComp.download = `compressed_k${kRange.value}`;
+          }
+          downloadComp.style.display = '';
           compMsg.innerHTML = `PSNR: ${data.psnr} dB — size ${data.comp_size} bytes (orig ${data.orig_size} bytes)`;
         })
         .catch(err => {
