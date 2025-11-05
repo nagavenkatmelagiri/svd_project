@@ -21,12 +21,27 @@
 
     <form id="uploadForm" method="post" enctype="multipart/form-data" action="{% url 'compressor:compress' %}">
       {% csrf_token %}
-      {{ form.as_p }}
+      <p>
+        {{ form.image.label_tag }}
+        {{ form.image }}
+      </p>
+      <!-- hidden input to carry k value from the slider to server -->
+      <input type="hidden" name="k" id="kInput" value="{{ form.initial.k|default:50 }}">
+
       <div class="slider-row">
         <label for="kRange">k</label>
-        <input id="kRange" name="kRange" type="range" min="1" max="200" value="{{ form.initial.k|default:50 }}">
+        <input id="kRange" type="range" min="1" max="200" value="{{ form.initial.k|default:50 }}">
         <output id="kValue">50</output>
         <div class="spinner" id="liveSpinner"></div>
+      </div>
+
+      <div class="slider-row" style="margin-top:10px;align-items:center">
+        {{ form.size.label_tag }}
+        {{ form.size }}
+      </div>
+
+      <div style="margin-top:8px">
+        {{ form.sharpen }} {{ form.sharpen.label_tag }}
       </div>
 
       <button type="submit" class="btn">Compress (save)</button>
@@ -102,7 +117,14 @@
       origObjectUrl = URL.createObjectURL(file);
       origPreview.src = origObjectUrl;
       origPreview.style.display = '';
-      origMsg.textContent = `${file.name} — ${file.size} bytes`;
+      // try to also show image dimensions
+      const imgForSize = new Image();
+      imgForSize.onload = () => {
+        origMsg.textContent = `${file.name} — ${file.size} bytes — ${imgForSize.naturalWidth}x${imgForSize.naturalHeight}px`;
+        origPreview.dataset.origWidth = imgForSize.naturalWidth;
+        origPreview.dataset.origHeight = imgForSize.naturalHeight;
+      };
+      imgForSize.src = origObjectUrl;
       // enable original download using objectURL (set filename)
       downloadOrig.href = origObjectUrl;
       downloadOrig.download = file.name;
@@ -110,8 +132,12 @@
       triggerPreview(); // auto preview when user picks file
     });
 
+    const kInput = document.getElementById('kInput');
+    const sizeSelect = document.getElementById('sizeSelect');
+
     kRange.addEventListener('input', () => {
       kValue.value = kRange.value;
+      kInput.value = kRange.value; // sync hidden input so full form submit has correct k
       // live preview but debounce to avoid too many uploads
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(triggerPreview, 400);
@@ -124,9 +150,10 @@
         return;
       }
 
-      const formData = new FormData();
-      formData.append('image', file);
-      formData.append('k', kRange.value);
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('k', kRange.value);
+  formData.append('size', sizeSelect.value);
 
       spinner.style.display = 'inline-block';
       compMsg.textContent = 'Processing...';
@@ -142,7 +169,7 @@
             compMsg.textContent = 'Error: ' + (data.error || 'unknown');
             return;
           }
-          compPreview.src = data.comp_url;
+          compPreview.src = data.comp_url + (data.comp_url.indexOf('?') === -1 ? ('?t=' + Date.now()) : ('&t=' + Date.now()));
           compPreview.style.display = '';
           // show download link for compressed preview
           downloadComp.href = data.comp_url;
@@ -154,7 +181,8 @@
             downloadComp.download = `compressed_k${kRange.value}`;
           }
           downloadComp.style.display = '';
-          compMsg.innerHTML = `PSNR: ${data.psnr} dB — size ${data.comp_size} bytes (orig ${data.orig_size} bytes)`;
+          const sizeLabel = sizeSelect.options[sizeSelect.selectedIndex].text || (`${Math.round(parseFloat(sizeSelect.value)*100)}%`);
+          compMsg.innerHTML = `PSNR: ${data.psnr} dB — size ${data.comp_size} bytes (orig ${data.orig_size} bytes) — output ${sizeLabel} — ${data.width}x${data.height}px`;
         })
         .catch(err => {
           spinner.style.display = 'none';

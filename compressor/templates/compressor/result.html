@@ -18,9 +18,9 @@
       </div>
 
       <div class="col">
-        <h3>Compressed (k={{ k }})</h3>
+  <h3>Compressed (k={{ k }}, size={{ size_label|default:size|default:1.0 }})</h3>
         <img src="{{ comp_url }}" alt="compressed" class="preview">
-          <p>Size: {{ comp_size }} bytes</p>
+          <p>Size: {{ comp_size }} bytes — Dimensions: {{ comp_width }}x{{ comp_height }} px</p>
           <p style="margin-top:8px">
             <a href="{{ comp_url }}" download class="btn">Download compressed</a>
             <a href="{{ orig_url }}" download class="btn secondary" style="margin-left:8px">Download original</a>
