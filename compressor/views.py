@@ -38,6 +38,14 @@ def compress_view(request):
             except Exception:
                 scale = 1.0
 
+            # optional: auto-select k to meet target PSNR if requested
+            maintain = form.cleaned_data.get('maintain_quality', False)
+            target_psnr = form.cleaned_data.get('target_psnr', 30) or 30
+            if maintain:
+                # find minimal k that meets the target PSNR (may be slow for large images)
+                from .utils import find_k_for_target_psnr
+                k = find_k_for_target_psnr(in_path, scale, float(target_psnr), max_k=200)
+
             out_name = f"{base}_svd_k{k}_s{int(scale*100)}{ext}"
             out_path = os.path.join(upload_dir, out_name)
 
@@ -58,6 +66,30 @@ def compress_view(request):
                 orig_img = orig_img.resize((w, h), Image.LANCZOS)
             orig = np.array(orig_img)
             computed_psnr = psnr(orig, comp_arr)
+
+            # Auto-correct very low PSNR by increasing k (doubling) until acceptable or max k
+            MIN_ACCEPTABLE_PSNR = 25.0
+            applied_k = k
+            auto_increased = False
+            while computed_psnr < MIN_ACCEPTABLE_PSNR and applied_k < 200:
+                auto_increased = True
+                applied_k = min(applied_k * 2 if applied_k > 1 else 2, 200)
+                out_name = f"{base}_svd_k{applied_k}_s{int(scale*100)}{ext}"
+                out_path = os.path.join(upload_dir, out_name)
+                comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=sharpen)
+                try:
+                    comp_img = Image.open(out_path)
+                    comp_w, comp_h = comp_img.size
+                except Exception:
+                    comp_w, comp_h = comp_arr.shape[1], comp_arr.shape[0]
+                if scale != 1.0:
+                    orig_img = Image.open(in_path).convert('RGB')
+                    orig_img = orig_img.resize((comp_w, comp_h), Image.LANCZOS)
+                    orig = np.array(orig_img)
+                computed_psnr = psnr(orig, comp_arr)
+
+            # final applied k
+            k = applied_k
 
             orig_size = os.path.getsize(in_path)
             comp_size = os.path.getsize(out_path)
@@ -130,6 +162,28 @@ def compress_preview(request):
         orig_img = orig_img.resize((w, h), Image.LANCZOS)
     orig = np.array(orig_img)
     computed_psnr = psnr(orig, comp_arr)
+
+    # Auto-correct very low PSNR by increasing k for preview as well
+    MIN_ACCEPTABLE_PSNR = 25.0
+    applied_k = k
+    auto_increased = False
+    while computed_psnr < MIN_ACCEPTABLE_PSNR and applied_k < 200:
+        auto_increased = True
+        applied_k = min(applied_k * 2 if applied_k > 1 else 2, 200)
+        out_name = f"{base}_svd_k{applied_k}_s{int(scale*100)}{ext}"
+        out_path = os.path.join(upload_dir, out_name)
+        comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=sharpen)
+        try:
+            comp_img = Image.open(out_path)
+            comp_w, comp_h = comp_img.size
+        except Exception:
+            comp_w, comp_h = comp_arr.shape[1], comp_arr.shape[0]
+        if scale != 1.0:
+            orig_img = Image.open(in_path).convert('RGB')
+            orig_img = orig_img.resize((comp_w, comp_h), Image.LANCZOS)
+            orig = np.array(orig_img)
+        computed_psnr = psnr(orig, comp_arr)
+    k = applied_k
 
     orig_size = os.path.getsize(in_path)
     comp_size = os.path.getsize(out_path)

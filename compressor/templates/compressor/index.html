@@ -43,6 +43,10 @@
       <div style="margin-top:8px">
         {{ form.sharpen }} {{ form.sharpen.label_tag }}
       </div>
+      <div style="margin-top:8px">
+        {{ form.maintain_quality }} {{ form.maintain_quality.label_tag }}
+        <span style="margin-left:12px">{{ form.target_psnr.label_tag }} {{ form.target_psnr }}</span>
+      </div>
 
       <button type="submit" class="btn">Compress (save)</button>
     </form>

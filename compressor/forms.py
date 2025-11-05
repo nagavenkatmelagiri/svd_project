@@ -16,3 +16,5 @@ class UploadForm(forms.Form):
         widget=forms.Select(attrs={'id': 'sizeSelect'})
     )
     sharpen = forms.BooleanField(required=False, initial=False, label='Apply sharpen')
+    maintain_quality = forms.BooleanField(required=False, initial=False, label='Maintain clarity (auto k)')
+    target_psnr = forms.IntegerField(min_value=10, max_value=60, initial=30, label='Target PSNR (dB)', required=False)

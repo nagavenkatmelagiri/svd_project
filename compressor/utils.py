@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image, ImageFilter
 import os
+import tempfile
 import math
 
 def svd_compress_channel(channel, k):
@@ -56,3 +57,45 @@ def psnr(orig_arr, recon_arr):
         return float('inf')
     PIXEL_MAX = 255.0
     return 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
+
+
+def find_k_for_target_psnr(in_path, scale, target_psnr, max_k=200):
+    """
+    Binary-search minimal k in [1, max_k] such that PSNR(orig_resized, reconstruction_k) >= target_psnr.
+    Returns the chosen k (int). May write temporary files during search.
+    """
+    # load original and resize if needed
+    img = Image.open(in_path).convert('RGB')
+    try:
+        scale = float(scale)
+    except Exception:
+        scale = 1.0
+    if scale != 1.0:
+        w, h = img.size
+        new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+        img = img.resize(new_size, Image.LANCZOS)
+    orig_arr = np.array(img)
+
+    lo, hi = 1, max_k
+    chosen = max_k
+    # binary search for minimal k meeting target
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        fd, tmp_path = tempfile.mkstemp(suffix='.png')
+        os.close(fd)
+        try:
+            comp_arr = compress_image_svd(in_path, tmp_path, mid, scale)
+            score = psnr(orig_arr, comp_arr)
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+        if score >= target_psnr:
+            chosen = mid
+            hi = mid - 1
+        else:
+            lo = mid + 1
+
+    return chosen
