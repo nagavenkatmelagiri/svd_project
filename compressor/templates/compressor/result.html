@@ -18,19 +18,23 @@
       </div>
 
       <div class="col">
-  <h3>Compressed (k={{ k }}, size={{ size_label|default:size|default:1.0 }})</h3>
+        <h3>Compressed ({{ method_display|default:"SVD" }}, size={{ size_label|default:size|default:1.0 }})</h3>
         <img src="{{ comp_url }}" alt="compressed" class="preview">
-          <p>Size: {{ comp_size }} bytes — Dimensions: {{ comp_width }}x{{ comp_height }} px</p>
-          <p style="margin-top:8px">
-            <a href="{{ comp_url }}" download class="btn">Download compressed</a>
-            <a href="{{ orig_url }}" download class="btn secondary" style="margin-left:8px">Download original</a>
-          </p>
-        </div>
+        <p>Size: {{ comp_size }} bytes — Dimensions: {{ comp_width }}x{{ comp_height }} px</p>
+        <p style="margin-top:8px">
+          <a href="{{ comp_url }}" download class="btn">Download compressed</a>
+          <a href="{{ orig_url }}" download class="btn secondary" style="margin-left:8px">Download original</a>
+        </p>
+      </div>
     </div>
 
     <div class="metrics">
+      <p><strong>Method:</strong> {{ method_display|default:"SVD" }}</p>
       <p><strong>Compression ratio:</strong> {{ ratio|floatformat:2 }}x</p>
       <p><strong>PSNR:</strong> {{ psnr|floatformat:2 }} dB</p>
+      {% if auto_increased %}
+      <p class="hint">⚠️ Note: Compression parameter was automatically increased to maintain quality.</p>
+      {% endif %}
       <p class="hint">Higher PSNR means closer to original. Aim for ≥ 30 dB for decent quality (depends on image).</p>
     </div>
 

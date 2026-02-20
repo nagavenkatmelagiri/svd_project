@@ -3,6 +3,7 @@ from PIL import Image
 import tempfile
 import os
 import numpy as np
+from unittest.mock import patch
 
 from .utils import compress_image_svd
 
@@ -61,3 +62,45 @@ class IntegrationTests(TestCase):
 		# Should render result page (200) and contain PSNR text
 		self.assertEqual(resp2.status_code, 200)
 		self.assertIn(b'Compression Result', resp2.content)
+
+	@patch('compressor.views.ML_AVAILABLE', True)
+	@patch('compressor.views.compress_image_cnn')
+	def test_preview_endpoint_with_cnn_method(self, mock_compress_image_cnn):
+		from django.urls import reverse
+		from io import BytesIO
+		from django.core.files.uploadedfile import SimpleUploadedFile
+
+		def fake_cnn_compress(in_path, out_path, model=None, model_path=None, latent_dim=64, model_type='standard'):
+			in_img = Image.open(in_path).convert('RGB')
+			arr = np.array(in_img)
+			Image.fromarray(arr).save(out_path)
+			return arr
+
+		mock_compress_image_cnn.side_effect = fake_cnn_compress
+
+		img = Image.new('RGB', (64, 64), color=(100, 150, 200))
+		buf = BytesIO()
+		img.save(buf, format='PNG')
+		buf.seek(0)
+
+		uploaded = SimpleUploadedFile('cnn_test.png', buf.getvalue(), content_type='image/png')
+		resp = self.client.post(
+			reverse('compressor:preview'),
+			{
+				'image': uploaded,
+				'method': 'cnn',
+				'k': 50,
+				'latent_dim': 64,
+				'model_type': 'standard',
+				'size': '1.0',
+			}
+		)
+
+		self.assertEqual(resp.status_code, 200)
+		data = resp.json()
+		self.assertEqual(data.get('method'), 'cnn')
+		self.assertIn('comp_url', data)
+		self.assertIn('psnr', data)
+		self.assertIn('comp_size', data)
+		self.assertIn('width', data)
+		self.assertIn('height', data)

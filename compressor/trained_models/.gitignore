@@ -1,0 +1,6 @@
+# Ignore trained model files (can be large)
+*.pth
+*.pt
+
+# But keep this directory in git
+!.gitkeep

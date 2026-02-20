@@ -3,7 +3,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>SVD Compressor — Live Preview</title>
+  <title>Image Compressor — SVD & CNN</title>
   <link rel="stylesheet" href="{% static 'compressor/css/styles.css' %}">
   <style>
     /* tiny spinner + layout tweak */
@@ -13,11 +13,13 @@
     .preview-card{flex:1}
     .muted{color:#6b7280;font-size:13px}
     .slider-row{display:flex;gap:12px;align-items:center;margin-top:8px}
+    .cnn-field{display:none}
+    .method-section{border:1px solid #e5e7eb;padding:12px;margin:12px 0;border-radius:6px}
   </style>
 </head>
 <body>
   <main class="container">
-    <h1>SVD Image Compressor — Live Preview</h1>
+    <h1>Image Compressor — SVD & CNN Deep Learning</h1>
 
     <form id="uploadForm" method="post" enctype="multipart/form-data" action="{% url 'compressor:compress' %}">
       {% csrf_token %}
@@ -25,33 +27,64 @@
         {{ form.image.label_tag }}
         {{ form.image }}
       </p>
-      <!-- hidden input to carry k value from the slider to server -->
-      <input type="hidden" name="k" id="kInput" value="{{ form.initial.k|default:50 }}">
-
-      <div class="slider-row">
-        <label for="kRange">k</label>
-        <input id="kRange" type="range" min="1" max="200" value="{{ form.initial.k|default:50 }}">
-        <output id="kValue">50</output>
-        <div class="spinner" id="liveSpinner"></div>
+      
+      <div class="method-section">
+        <p>
+          {{ form.method.label_tag }}
+          {{ form.method }}
+        </p>
       </div>
+      
+      <!-- SVD Parameters -->
+      <div id="svd-params" class="method-section">
+        <h3 style="margin-top:0">SVD Parameters</h3>
+        <!-- hidden input to carry k value from the slider to server -->
+        <input type="hidden" name="k" id="kInput" value="{{ form.initial.k|default:50 }}">
 
-      <div class="slider-row" style="margin-top:10px;align-items:center">
-        {{ form.size.label_tag }}
-        {{ form.size }}
-      </div>
+        <div class="slider-row">
+          <label for="kRange">k</label>
+          <input id="kRange" type="range" min="1" max="200" value="{{ form.initial.k|default:50 }}">
+          <output id="kValue">50</output>
+          <div class="spinner" id="liveSpinner"></div>
+        </div>
 
-      <div style="margin-top:8px">
-        {{ form.sharpen }} {{ form.sharpen.label_tag }}
+        <div style="margin-top:8px">
+          {{ form.maintain_quality }} {{ form.maintain_quality.label_tag }}
+          <span style="margin-left:12px">{{ form.target_psnr.label_tag }} {{ form.target_psnr }}</span>
+        </div>
       </div>
-      <div style="margin-top:8px">
-        {{ form.maintain_quality }} {{ form.maintain_quality.label_tag }}
-        <span style="margin-left:12px">{{ form.target_psnr.label_tag }} {{ form.target_psnr }}</span>
+      
+      <!-- CNN Parameters -->
+      <div id="cnn-params" class="method-section" style="display:none">
+        <h3 style="margin-top:0">CNN Parameters</h3>
+        <p>
+          {{ form.latent_dim.label_tag }}
+          {{ form.latent_dim }}
+        </p>
+        <p>
+          {{ form.model_type.label_tag }}
+          {{ form.model_type }}
+        </p>
+        <p class="muted">⚠️ Note: CNN requires PyTorch. If no trained model is found, results may be poor until you train a model.</p>
+      </div>
+      
+      <!-- Common Parameters -->
+      <div class="method-section">
+        <h3 style="margin-top:0">Common Options</h3>
+        <div class="slider-row">
+          {{ form.size.label_tag }}
+          {{ form.size }}
+        </div>
+
+        <div style="margin-top:8px">
+          {{ form.sharpen }} {{ form.sharpen.label_tag }}
+        </div>
       </div>
 
       <button type="submit" class="btn">Compress (save)</button>
     </form>
 
-    <p class="muted">Drag the slider to preview compression. Slider sends the file + k to the server via AJAX (won't save until you press Compress).</p>
+    <p class="muted">For SVD: Drag the slider to preview compression. For CNN: Click compress to see results.</p>
 
     <section class="preview-row" style="margin-top:18px">
       <div class="preview-card">
@@ -75,6 +108,32 @@
   </main>
 
   <script>
+    // Method switching
+    function toggleMethodFields() {
+      const methodField = document.getElementById('methodSelect') || document.getElementById('id_method');
+      if (!methodField) return;
+      const method = methodField.value;
+      const svdParams = document.getElementById('svd-params');
+      const cnnParams = document.getElementById('cnn-params');
+      
+      if (method === 'cnn') {
+        svdParams.style.display = 'none';
+        cnnParams.style.display = 'block';
+      } else {
+        svdParams.style.display = 'block';
+        cnnParams.style.display = 'none';
+      }
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      toggleMethodFields();
+      const methodSelect = document.getElementById('methodSelect') || document.getElementById('id_method');
+      if (methodSelect) {
+        methodSelect.addEventListener('change', toggleMethodFields);
+      }
+    });
+    
     // Helpers: CSRF
     function getCookie(name) {
       let cookieValue = null;
@@ -138,6 +197,12 @@
 
     const kInput = document.getElementById('kInput');
     const sizeSelect = document.getElementById('sizeSelect');
+    const methodSelect = document.getElementById('methodSelect') || document.getElementById('id_method');
+    const latentDimInput = document.getElementById('id_latent_dim');
+    const modelTypeSelect = document.getElementById('id_model_type');
+    const maintainQualityInput = document.getElementById('id_maintain_quality');
+    const targetPsnrInput = document.getElementById('id_target_psnr');
+    const sharpenInput = document.getElementById('id_sharpen');
 
     kRange.addEventListener('input', () => {
       kValue.value = kRange.value;
@@ -156,8 +221,18 @@
 
   const formData = new FormData();
   formData.append('image', file);
+  formData.append('method', methodSelect ? methodSelect.value : 'svd');
   formData.append('k', kRange.value);
   formData.append('size', sizeSelect.value);
+  formData.append('latent_dim', latentDimInput ? latentDimInput.value : '64');
+  formData.append('model_type', modelTypeSelect ? modelTypeSelect.value : 'standard');
+  formData.append('target_psnr', targetPsnrInput ? targetPsnrInput.value : '30');
+  if (maintainQualityInput && maintainQualityInput.checked) {
+    formData.append('maintain_quality', 'on');
+  }
+  if (sharpenInput && sharpenInput.checked) {
+    formData.append('sharpen', 'on');
+  }
 
       spinner.style.display = 'inline-block';
       compMsg.textContent = 'Processing...';
