@@ -68,7 +68,10 @@ def compress_view(request):
             computed_psnr = psnr(orig, comp_arr)
 
             # Auto-correct very low PSNR by increasing k (doubling) until acceptable or max k
-            MIN_ACCEPTABLE_PSNR = 25.0
+            if maintain:
+                MIN_ACCEPTABLE_PSNR = float(target_psnr)
+            else:
+                MIN_ACCEPTABLE_PSNR = 30.0
             applied_k = k
             auto_increased = False
             while computed_psnr < MIN_ACCEPTABLE_PSNR and applied_k < 200:
@@ -76,7 +79,8 @@ def compress_view(request):
                 applied_k = min(applied_k * 2 if applied_k > 1 else 2, 200)
                 out_name = f"{base}_svd_k{applied_k}_s{int(scale*100)}{ext}"
                 out_path = os.path.join(upload_dir, out_name)
-                comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=sharpen)
+                # apply sharpening on auto-increased attempts to improve clarity
+                comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=True)
                 try:
                     comp_img = Image.open(out_path)
                     comp_w, comp_h = comp_img.size
@@ -102,6 +106,7 @@ def compress_view(request):
                 'size': scale,
                 'size_label': next((label for val, label in form.SIZE_CHOICES if float(val) == scale), f"{int(scale*100)}%"),
                 'k': k,
+                'auto_increased': auto_increased,
                 'orig_size': orig_size,
                 'comp_size': comp_size,
                 'comp_width': comp_w,
@@ -163,8 +168,13 @@ def compress_preview(request):
     orig = np.array(orig_img)
     computed_psnr = psnr(orig, comp_arr)
 
-    # Auto-correct very low PSNR by increasing k for preview as well
-    MIN_ACCEPTABLE_PSNR = 25.0
+    # consider maintain_quality for preview too
+    maintain = form.cleaned_data.get('maintain_quality', False)
+    target_psnr = form.cleaned_data.get('target_psnr', 30) or 30
+    if maintain:
+        MIN_ACCEPTABLE_PSNR = float(target_psnr)
+    else:
+        MIN_ACCEPTABLE_PSNR = 30.0
     applied_k = k
     auto_increased = False
     while computed_psnr < MIN_ACCEPTABLE_PSNR and applied_k < 200:
@@ -172,7 +182,8 @@ def compress_preview(request):
         applied_k = min(applied_k * 2 if applied_k > 1 else 2, 200)
         out_name = f"{base}_svd_k{applied_k}_s{int(scale*100)}{ext}"
         out_path = os.path.join(upload_dir, out_name)
-        comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=sharpen)
+        # apply sharpening on auto-increased attempts to improve clarity
+        comp_arr = compress_image_svd(in_path, out_path, applied_k, scale, sharpen=True)
         try:
             comp_img = Image.open(out_path)
             comp_w, comp_h = comp_img.size

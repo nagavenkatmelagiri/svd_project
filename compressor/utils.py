@@ -24,30 +24,41 @@ def compress_image_svd(in_path, out_path, k, scale=1.0, sharpen=False):
         w, h = img.size
         new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
         img = img.resize(new_size, Image.LANCZOS)
-    arr = np.array(img).astype(float)
-    r = svd_compress_channel(arr[:, :, 0], k)
-    g = svd_compress_channel(arr[:, :, 1], k)
-    b = svd_compress_channel(arr[:, :, 2], k)
-    r = np.clip(r, 0, 255)
-    g = np.clip(g, 0, 255)
-    b = np.clip(b, 0, 255)
-    comp = np.stack([r, g, b], axis=2).astype(np.uint8)
-    out_img = Image.fromarray(comp)
+
+    # Convert to YCbCr and apply SVD on luminance with higher rank to preserve perceived clarity
+    ycbcr = img.convert('YCbCr')
+    arr = np.array(ycbcr).astype(float)
+
+    # Use a larger k for luminance (Y) to preserve detail, keep chroma at k
+    k_y = int(min(200, max(1, k * 2)))
+    k_c = int(max(1, k))
+
+    y = svd_compress_channel(arr[:, :, 0], k_y)
+    cb = svd_compress_channel(arr[:, :, 1], k_c)
+    cr = svd_compress_channel(arr[:, :, 2], k_c)
+
+    y = np.clip(y, 0, 255)
+    cb = np.clip(cb, 0, 255)
+    cr = np.clip(cr, 0, 255)
+
+    comp = np.stack([y, cb, cr], axis=2).astype(np.uint8)
+
+    # create YCbCr image and convert back to RGB
+    out_img = Image.fromarray(comp, mode='YCbCr').convert('RGB')
 
     # optional sharpening to improve perceived clarity after aggressive compression/resize
     if sharpen:
-        # UnsharpMask: radius small, percent moderate, threshold low
         out_img = out_img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
 
     # use higher quality for JPEGs to preserve clarity; PNGs saved normally
     ext = os.path.splitext(out_path)[1].lower()
     save_kwargs = {}
     if ext in ('.jpg', '.jpeg'):
-        save_kwargs['quality'] = 85
+        save_kwargs['quality'] = 90
         save_kwargs['optimize'] = True
 
     out_img.save(out_path, **save_kwargs)
-    return comp
+    return np.array(out_img)
 
 def psnr(orig_arr, recon_arr):
     orig = orig_arr.astype(float)
