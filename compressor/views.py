@@ -57,7 +57,11 @@ def compress_view(request):
             # Handle compression based on selected method
             if method == 'cnn' and ML_AVAILABLE:
                 # CNN compression
-                latent_dim = form.cleaned_data.get('latent_dim', 64) or 64
+                latent_dim_raw = form.cleaned_data.get('latent_dim', '64') or '64'
+                try:
+                    latent_dim = int(latent_dim_raw)
+                except Exception:
+                    latent_dim = 64
                 model_type = form.cleaned_data.get('model_type', 'standard') or 'standard'
                 
                 out_name = f"{base}_cnn_ld{latent_dim}_s{int(scale*100)}{ext}"
@@ -66,6 +70,13 @@ def compress_view(request):
                 # Get model path (check if trained model exists)
                 model_dir = os.path.join(settings.BASE_DIR, 'compressor', 'trained_models')
                 model_path = os.path.join(model_dir, f'autoencoder_{model_type}_ld{latent_dim}.pth')
+                if not os.path.exists(model_path):
+                    form.add_error(
+                        'method',
+                        f'No trained CNN model found for {model_type} with latent_dim={latent_dim}. '
+                        f'Train it first using train_cnn.py (expected: {os.path.basename(model_path)}).'
+                    )
+                    return render(request, 'compressor/index.html', {'form': form, 'ml_available': ML_AVAILABLE})
                 
                 # Resize image first if scale != 1.0
                 if scale != 1.0:
@@ -82,7 +93,7 @@ def compress_view(request):
                 comp_arr = compress_image_cnn(
                     compress_input, 
                     out_path, 
-                    model_path=model_path if os.path.exists(model_path) else None,
+                    model_path=model_path,
                     latent_dim=latent_dim,
                     model_type=model_type
                 )
@@ -233,7 +244,11 @@ def compress_preview(request):
         if not ML_AVAILABLE:
             return JsonResponse({'error': 'CNN compression is unavailable because PyTorch is not installed.'}, status=400)
 
-        latent_dim = form.cleaned_data.get('latent_dim', 64) or 64
+        latent_dim_raw = form.cleaned_data.get('latent_dim', '64') or '64'
+        try:
+            latent_dim = int(latent_dim_raw)
+        except Exception:
+            latent_dim = 64
         model_type = form.cleaned_data.get('model_type', 'standard') or 'standard'
 
         out_name = f"{base}_cnn_ld{latent_dim}_s{int(scale*100)}{ext}"
@@ -241,6 +256,16 @@ def compress_preview(request):
 
         model_dir = os.path.join(settings.BASE_DIR, 'compressor', 'trained_models')
         model_path = os.path.join(model_dir, f'autoencoder_{model_type}_ld{latent_dim}.pth')
+        if not os.path.exists(model_path):
+            return JsonResponse(
+                {
+                    'error': (
+                        f'No trained CNN model found for {model_type} with latent_dim={latent_dim}. '
+                        f'Train it first using train_cnn.py (expected: {os.path.basename(model_path)}).'
+                    )
+                },
+                status=400,
+            )
 
         if scale != 1.0:
             orig_img = Image.open(in_path).convert('RGB')
@@ -256,7 +281,7 @@ def compress_preview(request):
         comp_arr = compress_image_cnn(
             compress_input,
             out_path,
-            model_path=model_path if os.path.exists(model_path) else None,
+            model_path=model_path,
             latent_dim=latent_dim,
             model_type=model_type,
         )

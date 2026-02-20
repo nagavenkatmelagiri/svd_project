@@ -69,6 +69,7 @@ class IntegrationTests(TestCase):
 		from django.urls import reverse
 		from io import BytesIO
 		from django.core.files.uploadedfile import SimpleUploadedFile
+		from django.conf import settings
 
 		def fake_cnn_compress(in_path, out_path, model=None, model_path=None, latent_dim=64, model_type='standard'):
 			in_img = Image.open(in_path).convert('RGB')
@@ -84,17 +85,28 @@ class IntegrationTests(TestCase):
 		buf.seek(0)
 
 		uploaded = SimpleUploadedFile('cnn_test.png', buf.getvalue(), content_type='image/png')
-		resp = self.client.post(
-			reverse('compressor:preview'),
-			{
-				'image': uploaded,
-				'method': 'cnn',
-				'k': 50,
-				'latent_dim': 64,
-				'model_type': 'standard',
-				'size': '1.0',
-			}
-		)
+
+		model_dir = os.path.join(settings.BASE_DIR, 'compressor', 'trained_models')
+		os.makedirs(model_dir, exist_ok=True)
+		model_path = os.path.join(model_dir, 'autoencoder_standard_ld64.pth')
+		with open(model_path, 'wb') as model_file:
+			model_file.write(b'test-model-placeholder')
+
+		try:
+			resp = self.client.post(
+				reverse('compressor:preview'),
+				{
+					'image': uploaded,
+					'method': 'cnn',
+					'k': 50,
+					'latent_dim': 64,
+					'model_type': 'standard',
+					'size': '1.0',
+				}
+			)
+		finally:
+			if os.path.exists(model_path):
+				os.remove(model_path)
 
 		self.assertEqual(resp.status_code, 200)
 		data = resp.json()

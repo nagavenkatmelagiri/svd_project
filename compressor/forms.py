@@ -39,12 +39,17 @@ class UploadForm(forms.Form):
     )
     
     # CNN parameters
-    latent_dim = forms.IntegerField(
-        min_value=16, 
-        max_value=256, 
-        initial=64, 
+    LATENT_DIM_CHOICES = [
+        ('16', '16 (Very High Compression)'),
+        ('32', '32 (High Compression)'),
+        ('64', '64 (Balanced, Recommended)'),
+        ('128', '128 (Higher Quality)'),
+    ]
+    latent_dim = forms.ChoiceField(
+        choices=LATENT_DIM_CHOICES,
+        initial='64',
         label='Latent Dimension (lower = more compression)',
-        widget=forms.NumberInput(attrs={'class': 'cnn-field'}),
+        widget=forms.Select(attrs={'class': 'cnn-field'}),
         required=False
     )
     MODEL_TYPE_CHOICES = [
