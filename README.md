@@ -17,3 +17,4 @@ This project demonstrates image compression using Singular Value Decomposition (
 ## 🚀 How to Run
 1. Clone the repository
 2. Install dependencies:
+##
